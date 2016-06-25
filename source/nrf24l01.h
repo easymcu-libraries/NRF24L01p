@@ -1,5 +1,5 @@
 /***************************************************************************
-The NRF24L01+ library Written by Brennen Ball, © 2007 for PIC MCU
+The NRF24L01+ library Written by Brennen Ball, Â© 2007 for PIC MCU
 -> ported for AT91SAM7 MCU by SalehJG -> saleh_jamali@ymail.com
 -> ported for LPC1768 MCU + Cpp implementation by Morteza Zandi for EasyMCU
 
@@ -13,15 +13,9 @@ The NRF24L01+ library Written by Brennen Ball, © 2007 for PIC MCU
 #ifndef __NRF24L01_HPP__
 #define __NRF24L01_HPP__
 
-#include "lpc17xx.h"
-#include "delay.h"
-#include "type.h"
-#include "fio.h"
+#include "common_func.h"
 #include "spi.h"
 
-
-extern FIO io;
-extern DELAY delay;
 extern SPI spi;
 
 
