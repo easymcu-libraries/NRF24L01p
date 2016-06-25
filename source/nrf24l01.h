@@ -14,9 +14,6 @@ The NRF24L01+ library Written by Brennen Ball, © 2007 for PIC MCU
 #define __NRF24L01_HPP__
 
 #include "common_func.h"
-#include "spi.h"
-
-extern SPI spi;
 
 
 ////////////////////////////////////////////////////////////////////////////////////
