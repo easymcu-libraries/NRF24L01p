@@ -13,10 +13,21 @@ The NRF24L01+ library Written by Brennen Ball, © 2007 for PIC MCU
 #include "nrf24l01.h"
 
 
-	 NRF24L01::NRF24L01( bool mode, uchar width, bool autoACK, PORT_PIN_ARRAY Pnum, PORT_PIN_ARRAY ce_pin, PORT_PIN_ARRAY irq_pin )	 
+	 NRF24L01::NRF24L01( bool mode, uchar width, bool autoACK, PORT_PIN_ARRAY Pnum, PORT_PIN_ARRAY ce_pin, PORT_PIN_ARRAY irq_pin, PORT_PIN_ARRAY csn_pin, uchar spiNum )	 
 {
-	irq(irq_pin);
-	ce(ce_pin);
+	if(spiNum == 1)
+	{
+		spix = &spi1;
+	}
+	else
+	{
+		spix = &spi2;		
+	}
+	spix->init();
+	setIrq(irq_pin);
+	setCe(ce_pin);
+	setCsn(csn_pin);	
+	
 	init(mode, width,autoACK, Pnum);
 	irq_clear_all();
 }	 
@@ -86,9 +97,11 @@ void NRF24L01::power_up_param(bool rx_active_mode, unsigned char config)
 	config |= nrf24l01_CONFIG_PWR_UP;
 	
 	write_register(nrf24l01_CONFIG, &config, 1);
-	test = spi.read(nrf24l01_CONFIG);		//SPI_NRF::read_register(nrf24l01_CONFIG);	
+	csnLow();
+	test = spix->read(nrf24l01_CONFIG);		//SPI_NRF::read_register(nrf24l01_CONFIG);	
+	csnHigh();
 	test = test;
-	delay.ms(800);
+//	delay.ms(800);
 
 	if((config & nrf24l01_CONFIG_PRIM_RX) == 0)
 			CEl();
@@ -141,13 +154,14 @@ unsigned char NRF24L01::write(uchar * data, unsigned int len, bool transmmit)
 	unsigned char status;
 	
 	io.reset(transfer_monitor_pin);
+	csnLow();
+	status = spix->write(nrf24l01_W_TX_PAYLOAD, data, len);
+	csnHigh();
 	
-	status = spi.write(nrf24l01_W_TX_PAYLOAD, data, len);
-	
-	delay.us(1);
+//	delay.us(1);
 	if(transmmit == true)
 		transmit();
-	delay.us(1);
+//	delay.us(1);
 	
 	transmit_complete();
 
@@ -164,15 +178,21 @@ unsigned char NRF24L01::write(uchar * data, unsigned int len, bool transmmit)
 //unsigned int len is the length of the payload being clocked out of the nrf24l01 (this
 //	should be sized according to the payload length specified to the nrf24l01).
 //returns the value of the STATUS register
-unsigned char NRF24L01::read(uchar * data, unsigned int len)	//_rx_payload
+unsigned char NRF24L01::read(uchar * data, unsigned int len, bool transmit)	//_rx_payload
 {
 	unsigned char status;
 	
 	io.reset(transfer_monitor_pin);
 	
 	CEl();
-	status = spi.read(nrf24l01_R_RX_PAYLOAD, data, len);
+	csnLow();
+	status = spix->read(nrf24l01_R_RX_PAYLOAD, data, len);
+	csnHigh();
+	if(transmit)
+		delay.ms(40);
 	CEh();
+	
+	clear_flush();
 	io.set(transfer_monitor_pin);	
 	
 	return status;
@@ -183,7 +203,13 @@ unsigned char NRF24L01::read(uchar * data, unsigned int len)	//_rx_payload
 //returns the value of the STATUS register
 unsigned char NRF24L01::flush_tx()
 {
-	return spi.write(nrf24l01_FLUSH_TX, null, 0);
+	uchar res;
+	
+	csnLow();
+	res = spix->write(nrf24l01_FLUSH_TX, null, 0);
+	csnHigh();
+	
+	return res;
 }
 //===================================================================================================
 //executes the FLUSH_RX SPI operation
@@ -191,7 +217,13 @@ unsigned char NRF24L01::flush_tx()
 //returns the value of the STATUS register
 unsigned char NRF24L01::flush_rx()
 {
-	return spi.write(nrf24l01_FLUSH_RX, null, 0);
+	uchar res;
+	
+	csnLow();
+	res = spix->write(nrf24l01_FLUSH_RX, null, 0);
+	csnHigh();
+	
+	return res;
 }
 //===================================================================================================
 //executes the REUSE_TX_PL SPI operation
@@ -199,7 +231,13 @@ unsigned char NRF24L01::flush_rx()
 //returns the value of the STATUS register
 unsigned char NRF24L01::reuse_tx_pl()
 {
-	return spi.write(nrf24l01_REUSE_TX_PL, null, 0);
+	uchar res;
+	
+	csnLow();
+	res = spix->write(nrf24l01_REUSE_TX_PL, null, 0);
+	csnHigh();
+	
+	return res;
 }
 //===================================================================================================
 
@@ -208,7 +246,15 @@ unsigned char NRF24L01::reuse_tx_pl()
 //returns the value of the STATUS register
 unsigned char NRF24L01::nop()
 {
-	return spi.write(nrf24l01_NOP, null, 0);
+	uchar res;
+//	return spix->write(nrf24l01_NOP, null, 0);
+	
+	csnLow();
+	res = spix->transfer((uchar)nrf24l01_NOP);
+	csnHigh();
+//	io.set(P22);
+	
+	return res;
 }
 //===================================================================================================
 
@@ -411,7 +457,7 @@ void NRF24L01::irq_clear_all()
 	unsigned char data = nrf24l01_STATUS_RX_DR | nrf24l01_STATUS_TX_DS |nrf24l01_STATUS_MAX_RT;
 	CEl();
 	write_register(nrf24l01_STATUS, &data, 1);
-	delay.us(200);
+//	delay.us(200);
 	CEh();
 }
 bool NRF24L01::irq_pin_active()
@@ -490,7 +536,13 @@ void NRF24L01::clear_flush()
 //===============================
 unsigned char NRF24L01::read_register(unsigned char regnumber, unsigned char * data, unsigned int len)
 {
-	return spi.read(regnumber | nrf24l01_R_REGISTER_DATA, data, len);
+	uchar res;
+	
+	csnLow();
+	res = spix->read(regnumber | nrf24l01_R_REGISTER_DATA, data, len);
+	csnHigh();
+	
+	return res;
 }
 //==============================================
 void NRF24L01::get_all_registers(unsigned char * data)	
@@ -502,7 +554,7 @@ void NRF24L01::get_all_registers(unsigned char * data)
 
 	for(outer = 0; outer <= 0x17; outer++)
 	{
-		spi.read(outer, buffer, 5);	
+		spix->read(outer, buffer, 5);	
 		delay.ms(1);
 		delay.ms(1);
 		for(inner = 0; inner < 5; inner++)
@@ -520,25 +572,31 @@ void NRF24L01::get_all_registers(unsigned char * data)
 //-------------------------------------------------------------------------------
 unsigned char NRF24L01::write_register(unsigned char address,unsigned char *value,unsigned char len)
 {
-	return spi.write(nrf24l01_W_REGISTER | (address & nrf24l01_W_REGISTER_DATA),value,len);
+	uchar res;
+	
+	csnLow();
+	res = spix->write(nrf24l01_W_REGISTER | (address & nrf24l01_W_REGISTER_DATA),value,len);
+	csnHigh();
+	
+	return res;
 }
 
 //======================================
-void NRF24L01::CEh()
+__inline void NRF24L01::CEh()
 {
 	io.set(ceP);		
 }
 //================
-void NRF24L01::CEl()
+__inline void NRF24L01::CEl()
 {
 	 io.reset(ceP);			
 }
 //==================
-unsigned char NRF24L01::get_input(unsigned int pin)
-{
-return(( LPC_GPIO0->FIOPIN & pin ));	//>>pin
+//unsigned char NRF24L01::get_input(unsigned int pin)
+//{
+//return(( LPC_GPIO0->FIOPIN & pin ));	//>>pin
 
-}	 
+//}	 
 //------------------------------------------
 void NRF24L01::transmit_complete(void)
 {
@@ -564,26 +622,36 @@ unsigned char NRF24L01::available(void)
 			{
 			  status1 = irq_pin_active();
 				status2 = irq_rx_dr_active();
-				io.reset(transfer_monitor_pin);
-
-				if(io.read(transfer_monitor_pin))
-						io.reset(transfer_monitor_pin);
-				else
-						io.set(transfer_monitor_pin);
 			}while(!(status1 && status2));
-				clear_flush();
 			return 1;	
 }
 
-void NRF24L01::irq(PORT_PIN_ARRAY irq_pin)
+void NRF24L01::setIrq(PORT_PIN_ARRAY irq_pin)
 {
 	irqP = irq_pin;
 io.mode(irqP, INPUT_PULLUP);
 }
 
-void NRF24L01::ce(PORT_PIN_ARRAY ce_pin)
+void NRF24L01::setCe(PORT_PIN_ARRAY ce_pin)
 {
 	ceP = ce_pin;
 	io.mode(ceP, OUTPUT);
+}
+
+void NRF24L01::setCsn(PORT_PIN_ARRAY csn_pin)
+{
+	csnP = csn_pin;
+	io.mode(csnP, OUTPUT);
+	io.set(csnP);
+}
+
+__inline void NRF24L01::csnHigh(void)
+{
+	io.set(csnP);
+}
+
+__inline void NRF24L01::csnLow(void)
+{
+	io.reset(csnP);
 }
 

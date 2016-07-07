@@ -14,9 +14,6 @@ The NRF24L01+ library Written by Brennen Ball, © 2007 for PIC MCU
 #define __NRF24L01_HPP__
 
 #include "common_func.h"
-#include "spi.h"
-
-extern SPI spi;
 
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -265,22 +262,24 @@ extern SPI spi;
 #define RX 	1
 #define AUTOACK_ENABLE true
 
-class NRF24L01 //: public SPI_NRF		
+class NRF24L01	
 {
 	public:
-			NRF24L01(bool mode=RX, uchar width=3, bool autoACK=true, PORT_PIN_ARRAY Pnum = LED1, PORT_PIN_ARRAY ce_pin = P11, PORT_PIN_ARRAY irq_pin = P12);		//ialize_debug			
+			NRF24L01(bool mode=RX, uchar width=3, bool autoACK=true, PORT_PIN_ARRAY Pnum = LED1, PORT_PIN_ARRAY ce_pin = P11, PORT_PIN_ARRAY irq_pin = P12, PORT_PIN_ARRAY csn_pin = P22, uchar spiNum = 1);		//ialize_debug			
 			void init(bool rx, unsigned char p0_payload_width, bool enable_auto_ack = true, PORT_PIN_ARRAY Pnum = LED1);		  //ialize_debug	
 			unsigned char write(uchar * data, unsigned int len, bool transmit = true);		//_tx_payload
-			unsigned char read(uchar * data, unsigned int len);										//_rx_payload
-			void irq(PORT_PIN_ARRAY irq_pin);
-			void ce(PORT_PIN_ARRAY ce_pin);
+			unsigned char read(uchar * data, unsigned int len, bool transmit = true);		//_rx_payload
+			void setIrq(PORT_PIN_ARRAY irq_pin);
+			void setCe(PORT_PIN_ARRAY ce_pin);
+			void setCsn(PORT_PIN_ARRAY csn_pin);
 			unsigned char available(void);
 			
 	private:
 			PORT_PIN_ARRAY transfer_monitor_pin;
 			PORT_PIN_ARRAY ceP;	
 			PORT_PIN_ARRAY irqP;
-				
+			PORT_PIN_ARRAY csnP;
+	
 			void irq_clear_all(void);	
 			void transmit_complete(void);
 			void transmit(void);
@@ -342,7 +341,10 @@ class NRF24L01 //: public SPI_NRF
 			//==============================
 			void CEh(void);
 			void CEl(void);
-			unsigned char get_input(unsigned int pin);			
+			void csnHigh(void);
+			void csnLow(void);
+			unsigned char get_input(unsigned int pin);	
+			SSP *spix;
 };
 
 #endif
